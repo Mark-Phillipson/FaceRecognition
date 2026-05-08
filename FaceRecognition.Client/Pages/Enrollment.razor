@@ -3,13 +3,16 @@
 @using FaceRecognition.Client.Models
 @inject FaceRecognition.Client.Services.IIndexedDbService IndexedDb
 @inject FaceRecognition.Client.Services.IFaceService FaceService
+@inject IJSRuntime JS
 
-<h3>Enroll Person</h3>
+<div class="card page-card">
+    <div class="card-body">
+        <h3>Enroll Person</h3>
 
-<EditForm Model="person" OnValidSubmit="HandleValidSubmit">
+        <EditForm Model="person" OnValidSubmit="HandleValidSubmit">
     <div class="mb-3">
         <label class="form-label">Name</label>
-        <InputText @bind-Value="person.Name" @oninput="OnNameInput" class="form-control" placeholder="Full name, e.g., John Smith" />
+        <InputText id="nameInput" @bind-Value="person.Name" @oninput="OnNameInput" class="form-control" placeholder="Full name, e.g., John Smith" />
         <div class="form-text">Enter the person's full name. Required for enrollment and quizzes.</div>
     </div>
     <div class="mb-3">
@@ -49,11 +52,13 @@
     </button>
     <div class="form-text text-muted mt-2">Compute: generates a numeric face descriptor used for matching. First run may download ML models (~several MB).</div>
     <div class="form-text text-muted">Save: stores the name, photo, and computed embedding locally in your browser's IndexedDB. Save is enabled after a successful embedding computation.</div>
-    @if (!string.IsNullOrEmpty(statusMessage))
-    {
-        <div class="mt-2 text-success">@statusMessage</div>
-    }
-</EditForm>
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="mt-2 text-success">@statusMessage</div>
+            }
+        </EditForm>
+    </div>
+</div>
 
 @code {
     private Person person = new Person();
@@ -82,6 +87,21 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("focusInterop.focusElementById", "nameInput");
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
     private async Task HandleValidSubmit()
     {
         if (!embeddingComputed)
@@ -89,11 +109,19 @@
             statusMessage = "Please compute the embedding before saving.";
             return;
         }
-
+        // prevent creating duplicate person entries with identical names
         isSaving = true;
         statusMessage = string.Empty;
         try
         {
+            var existing = await IndexedDb.GetAllAsync<Person>("persons");
+            var match = existing?.FirstOrDefault(p => string.Equals(p.Name?.Trim(), person.Name?.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                statusMessage = $"A person named '{person.Name}' already exists. Use a different name or add photos to the existing person via Manage Data.";
+                return;
+            }
+
             await IndexedDb.PutAsync("persons", person);
             if (!string.IsNullOrEmpty(previewUrl))
             {

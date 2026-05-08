@@ -32,5 +32,17 @@ namespace FaceRecognition.Client.Services
             await EnsureLoadedAsync();
             return await _js.InvokeAsync<FaceDetectionResult?>("faceInterop.detectSingleFaceEmbedding", dataUrl);
         }
+
+        public async Task<List<FaceDetectionResult>> DetectMultipleFacesEmbeddingAsync(string dataUrl)
+        {
+            await EnsureLoadedAsync();
+            return await _js.InvokeAsync<List<FaceDetectionResult>>("faceInterop.detectAllFacesEmbedding", dataUrl);
+        }
+
+        public async Task<List<FaceDetectionResult>> DetectMultipleFacesEmbeddingAsync(string dataUrl, int thumbnailMaxSize)
+        {
+            await EnsureLoadedAsync();
+            return await _js.InvokeAsync<List<FaceDetectionResult>>("faceInterop.detectAllFacesEmbedding", dataUrl, thumbnailMaxSize);
+        }
     }
 }

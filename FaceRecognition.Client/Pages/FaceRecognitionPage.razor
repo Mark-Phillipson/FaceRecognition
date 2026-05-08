@@ -1,3 +1,4 @@
+@page "/"
 @page "/facerecognition"
 @using FaceRecognition.Client.Models
 @inject FaceRecognition.Client.Services.IIndexedDbService IndexedDb
@@ -6,8 +7,19 @@
 
 <p>Offline face recognition module (work in progress).</p>
 
+<h5>Planned features</h5>
+<ul>
+    <li><strong>Enrollment:</strong> add a person with a name and a headshot (stored locally).</li>
+    <li><strong>Recognition:</strong> upload a photo and find matching enrolled people.</li>
+    <li><strong>Group import:</strong> detect multiple faces in a group photo and assign names.</li>
+    <li><strong>Quiz modes:</strong> face → name and name → face for practice.</li>
+    <li><strong>Offline-first storage:</strong> all data persisted in the browser via IndexedDB.</li>
+    <li><strong>Local models:</strong> download and cache ML models so the app works without a server.</li>
+    <li><strong>Export / backup:</strong> export and restore your local dataset (planned).</li>
+</ul>
+
 <div class="mb-3">
-    <button class="btn btn-primary" @onclick="CreateSample">Add sample person</button>
+    <div class="form-text mt-2">Tip: use the <em>Enrollment</em> page to add real people and photos.</div>
 </div>
 
 @code {
@@ -16,10 +28,5 @@
         await IndexedDb.InitAsync();
     }
 
-    private async Task CreateSample()
-    {
-        var p = new Person { Name = "Sample Person" };
-        await IndexedDb.PutAsync("persons", p);
-        var people = await IndexedDb.GetAllAsync<Person>("persons");
-    }
+    // Sample person creation removed per request.
 }

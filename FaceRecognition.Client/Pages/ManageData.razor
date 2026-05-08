@@ -1,0 +1,135 @@
+@page "/manage"
+@using FaceRecognition.Client.Models
+@inject FaceRecognition.Client.Services.IIndexedDbService IndexedDb
+@inject IJSRuntime JS
+
+<h3>Manage Local Data</h3>
+
+<p>View and delete locally stored people, images, and embeddings in IndexedDB.</p>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="mb-2">@statusMessage</div>
+}
+
+<h5>People (@(people?.Count ?? 0))</h5>
+@if (people == null)
+{
+    <div>Loading…</div>
+}
+else if (people.Count == 0)
+{
+    <div class="text-muted">No people enrolled yet.</div>
+}
+else
+{
+    <ul class="list-group mb-3">
+        @foreach (var p in people)
+        {
+            <li class="list-group-item d-flex align-items-center">
+                <div>
+                    <strong>@p.Name</strong>
+                    <div class="small text-muted">Created: @p.CreatedAt.ToLocalTime()</div>
+                </div>
+                <div class="ms-3 text-muted">(@images.Count(i => i.PersonId == p.Id) images)</div>
+                <div class="ms-auto">
+                    <button class="btn btn-sm btn-danger" @onclick="(() => DeletePerson(p.Id, p.Name))">Delete</button>
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+<h5>Images (@(images?.Count ?? 0))</h5>
+@if (images == null)
+{
+    <div>Loading…</div>
+}
+else if (images.Count == 0)
+{
+    <div class="text-muted">No images saved yet.</div>
+}
+else
+{
+    <div class="row">
+        @foreach (var img in images)
+        {
+            <div class="col-6 col-sm-3 mb-3">
+                <div class="card">
+                    <img src="@img.DataUri" style="width:100%;height:120px;object-fit:cover;" />
+                    <div class="card-body p-2 text-center">
+                        <div class="small text-muted">Person: @GetPersonName(img.PersonId)</div>
+                        <button class="btn btn-sm btn-outline-danger mt-2" @onclick="(() => DeleteImage(img.Id))">Delete</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<Person> people = new();
+    private List<FaceImage> images = new();
+    private List<FaceEmbedding> embeddings = new();
+    private string statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        people = await IndexedDb.GetAllAsync<Person>("persons") ?? new List<Person>();
+        images = await IndexedDb.GetAllAsync<FaceImage>("images") ?? new List<FaceImage>();
+        embeddings = await IndexedDb.GetAllAsync<FaceEmbedding>("embeddings") ?? new List<FaceEmbedding>();
+        StateHasChanged();
+    }
+
+    private string GetPersonName(string personId)
+    {
+        var p = people.FirstOrDefault(x => x.Id == personId);
+        return p?.Name ?? "(unknown)";
+    }
+
+    private async Task DeleteImage(string imageId)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", "Delete this image and its embeddings?");
+        if (!ok) return;
+        // refresh embeddings list
+        embeddings = await IndexedDb.GetAllAsync<FaceEmbedding>("embeddings") ?? new List<FaceEmbedding>();
+        var toDelete = embeddings.Where(e => e.ImageId == imageId).ToList();
+        foreach (var e in toDelete)
+        {
+            await IndexedDb.DeleteAsync("embeddings", e.Id);
+        }
+        await IndexedDb.DeleteAsync("images", imageId);
+        statusMessage = "Image deleted.";
+        await LoadAllAsync();
+    }
+
+    private async Task DeletePerson(string personId, string personName)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Delete person '{personName}' and all associated images and embeddings?");
+        if (!ok) return;
+
+        // refresh lists
+        images = await IndexedDb.GetAllAsync<FaceImage>("images") ?? new List<FaceImage>();
+        embeddings = await IndexedDb.GetAllAsync<FaceEmbedding>("embeddings") ?? new List<FaceEmbedding>();
+
+        var personImages = images.Where(i => i.PersonId == personId).ToList();
+        foreach (var img in personImages)
+        {
+            var embToDelete = embeddings.Where(e => e.ImageId == img.Id).ToList();
+            foreach (var e in embToDelete)
+            {
+                await IndexedDb.DeleteAsync("embeddings", e.Id);
+            }
+            await IndexedDb.DeleteAsync("images", img.Id);
+        }
+
+        await IndexedDb.DeleteAsync("persons", personId);
+        statusMessage = $"Deleted person '{personName}' and {personImages.Count} images.";
+        await LoadAllAsync();
+    }
+}

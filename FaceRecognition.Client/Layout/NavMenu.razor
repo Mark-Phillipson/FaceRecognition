@@ -1,6 +1,6 @@
 ﻿<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">FaceRecognition.Client</a>
+        <a class="navbar-brand" href="">Face Recognition</a>
         <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -9,34 +9,46 @@
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="nav flex-column">
+        <!-- Root now shows Face Recognition -->
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                <img src="/lib/bootstrap-icons/icons/person-bounding-box.svg" class="nav-icon" aria-hidden="true" alt="Face" />
+                Face Recognition
             </NavLink>
         </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="facerecognition">
-                <span class="bi bi-person-square-nav-menu" aria-hidden="true"></span> Face Recognition
-            </NavLink>
-        </div>
+
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="enrollment">
-                <span class="bi bi-person-plus-fill-nav-menu" aria-hidden="true"></span> Enrollment
+                <img src="/lib/bootstrap-icons/icons/person-plus.svg" class="nav-icon" aria-hidden="true" alt="Enrollment" />
+                Enrollment
             </NavLink>
         </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="group-enroll">
+                <img src="/lib/bootstrap-icons/icons/people.svg" class="nav-icon" aria-hidden="true" alt="Group Enroll" />
+                Group Enroll
+            </NavLink>
+        </div>
+
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="recognize">
-                <span class="bi bi-eye-fill-nav-menu" aria-hidden="true"></span> Recognize
+                <img src="/lib/bootstrap-icons/icons/camera.svg" class="nav-icon" aria-hidden="true" alt="Recognize" />
+                Recognize
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="quiz">
+                <img src="/lib/bootstrap-icons/icons/question-circle.svg" class="nav-icon" aria-hidden="true" alt="Quiz" />
+                Quiz
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="manage">
+                <img src="/lib/bootstrap-icons/icons/trash.svg" class="nav-icon" aria-hidden="true" alt="Manage Data" />
+                Manage Data
             </NavLink>
         </div>
     </nav>

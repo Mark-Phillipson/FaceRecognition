@@ -1,0 +1,286 @@
+@page "/quiz"
+@using FaceRecognition.Client.Models
+@inject FaceRecognition.Client.Services.IIndexedDbService IndexedDb
+@inject IJSRuntime JS
+
+<h3>Quiz</h3>
+
+<div class="mb-3">
+    <label class="form-label">Mode</label>
+    <div>
+        <button class="btn @(mode == "face" ? "btn-primary" : "btn-outline-primary") me-2" @onclick="SetModeFace">Face → Name</button>
+        <button class="btn @(mode == "name" ? "btn-primary" : "btn-outline-primary")" @onclick="SetModeName">Name → Face</button>
+    </div>
+</div>
+
+<div class="mb-3 d-flex align-items-center">
+    <label class="form-label me-2">Options</label>
+    <select @bind="optionsCount" class="form-select w-auto">
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+    </select>
+    <button class="btn btn-success ms-3" @onclick="StartQuiz" disabled="@(isRunning)">Start</button>
+    <button class="btn btn-secondary ms-2" @onclick="StopQuiz" disabled="!isRunning">Stop</button>
+    <div class="ms-auto">Score: <strong>@correctCount</strong> / @questionCount</div>
+</div>
+
+@if (!isRunning)
+{
+    <div class="alert alert-info">Press Start to begin the quiz. Requires at least 2 persons enrolled with images.</div>
+}
+
+@if (isRunning && currentQuestion != null)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            @if (mode == "face")
+            {
+                <div class="mb-3 text-center">
+                    <img src="@currentQuestion.ImageDataUrl" style="max-width:320px;max-height:320px;" />
+                </div>
+                <div class="list-group">
+                    @for (int i = 0; i < currentQuestion.Options.Count; i++)
+                    {
+                        var idx = i;
+                        var opt = currentQuestion.Options[idx];
+                        var cls = answerRevealed ? (opt.IsCorrect ? "list-group-item-success" : (idx == selectedIndex && !opt.IsCorrect ? "list-group-item-danger" : "")) : "";
+                        <button class="list-group-item list-group-item-action @cls" @onclick="(()=>SelectOption(idx))">@opt.Label</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <h5>@currentQuestion.Prompt</h5>
+                </div>
+                <div class="row">
+                    @for (int i = 0; i < currentQuestion.Options.Count; i++)
+                    {
+                        var idx = i;
+                        var opt = currentQuestion.Options[idx];
+                        var cls = answerRevealed ? (opt.IsCorrect ? "border-success" : (idx == selectedIndex && !opt.IsCorrect ? "border-danger" : "border-secondary")) : "border-secondary";
+                        <div class="col-6 col-md-3 mb-2">
+                            <div class="card @cls" style="cursor:pointer;" @onclick="(()=>SelectOption(idx))">
+                                <img src="@opt.ImageDataUrl" class="card-img-top" style="object-fit:cover;width:100%;height:140px;" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="mt-3">
+                @if (answerRevealed)
+                {
+                    <button class="btn btn-primary me-2" @onclick="NextQuestion">Next</button>
+                }
+                <button class="btn btn-secondary" @onclick="StopQuiz">Stop</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string mode = "face"; // "face" or "name"
+    private int optionsCount = 4;
+    private bool isRunning = false;
+
+    private List<Person> people = new();
+    private List<FaceImage> images = new();
+
+    private int correctCount = 0;
+    private int questionCount = 0;
+
+    private QuizQuestion? currentQuestion;
+    private bool answerRevealed = false;
+    private int selectedIndex = -1;
+
+    private Random rnd = new Random();
+    private int currentQuestionId = 0;
+    private const int AutoAdvanceDelayMs = 1200;
+
+    private class QuizOption { public string Label = string.Empty; public bool IsCorrect = false; public string ImageDataUrl = string.Empty; public string PersonId = string.Empty; }
+    private class QuizQuestion { public string ImageDataUrl = string.Empty; public string Prompt = string.Empty; public List<QuizOption> Options = new List<QuizOption>(); }
+
+    private void SetMode(string m)
+    {
+        mode = m;
+    }
+
+    private void SetModeFace() => SetMode("face");
+    private void SetModeName() => SetMode("name");
+
+    private async Task StartQuiz()
+    {
+        people = await IndexedDb.GetAllAsync<Person>("persons");
+        images = await IndexedDb.GetAllAsync<FaceImage>("images");
+
+        await JS.InvokeVoidAsync("console.log", "StartQuiz: peopleCount", people.Count, "imagesCount", images.Count);
+        if (images.Count > 0)
+        {
+            try { await JS.InvokeVoidAsync("console.log", "firstImage", images[0]); } catch { }
+        }
+
+        if (people.Count < 2 || images.Count < 1)
+        {
+            await JSAlert("Not enough enrolled people or images to run the quiz.");
+            return;
+        }
+
+        isRunning = true;
+        correctCount = 0;
+        questionCount = 0;
+        NextQuestion();
+    }
+
+    private async Task JSAlert(string message)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("alert", message);
+        }
+        catch { }
+    }
+
+    private void StopQuiz()
+    {
+        isRunning = false;
+        currentQuestion = null;
+        answerRevealed = false;
+        selectedIndex = -1;
+    }
+
+    private void NextQuestion()
+    {
+        answerRevealed = false;
+        selectedIndex = -1;
+        currentQuestion = mode == "face" ? BuildFaceToNameQuestion() : BuildNameToFaceQuestion();
+        questionCount++;
+        // bump question id so any pending auto-advance for the previous question is ignored
+        currentQuestionId++;
+        StateHasChanged();
+    }
+
+    private QuizQuestion BuildFaceToNameQuestion()
+    {
+        // pick a random image (must have a person)
+        var imgsWithPerson = images.Where(i => !string.IsNullOrEmpty(i.PersonId)).ToList();
+        if (imgsWithPerson.Count == 0) return new QuizQuestion { Prompt = "No images available" };
+        var chosen = imgsWithPerson[rnd.Next(imgsWithPerson.Count)];
+        // debug
+        _ = JS.InvokeVoidAsync("console.log", "BuildFaceToNameQuestion chosen image length", (chosen?.DataUri ?? string.Empty).Length);
+        var correctPerson = people.FirstOrDefault(p => p.Id == chosen.PersonId)?.Name ?? "Unknown";
+
+        var opts = new List<QuizOption>();
+        opts.Add(new QuizOption { Label = correctPerson, IsCorrect = true, PersonId = chosen.PersonId });
+
+        // add distractor names
+        var otherPeople = people.Where(p => p.Id != chosen.PersonId).ToList();
+        Shuffle(otherPeople);
+        for (int i = 0; i < optionsCount - 1 && i < otherPeople.Count; i++)
+        {
+            opts.Add(new QuizOption { Label = otherPeople[i].Name, IsCorrect = false, PersonId = otherPeople[i].Id });
+        }
+
+        // if not enough options, duplicate random names (rare)
+        while (opts.Count < optionsCount)
+        {
+            opts.Add(new QuizOption { Label = "Unknown", IsCorrect = false });
+        }
+
+        Shuffle(opts);
+
+        return new QuizQuestion { ImageDataUrl = GetSafeImageDataUri(chosen), Options = opts };
+    }
+
+    private QuizQuestion BuildNameToFaceQuestion()
+    {
+        // pick a random person who has at least one image
+        var peopleWithImages = people.Where(p => images.Any(im => im.PersonId == p.Id)).ToList();
+        if (peopleWithImages.Count == 0) return new QuizQuestion { Prompt = "No persons with images" };
+        var chosenPerson = peopleWithImages[rnd.Next(peopleWithImages.Count)];
+        var personImages = images.Where(im => im.PersonId == chosenPerson.Id).ToList();
+        _ = JS.InvokeVoidAsync("console.log", "BuildNameToFaceQuestion chosenPerson", chosenPerson?.Name, "personImagesCount", personImages.Count);
+        var correctImg = personImages[rnd.Next(personImages.Count)];
+
+        var opts = new List<QuizOption>();
+        opts.Add(new QuizOption { ImageDataUrl = GetSafeImageDataUri(correctImg), IsCorrect = true, PersonId = chosenPerson.Id });
+
+        var otherImages = images.Where(im => im.PersonId != chosenPerson.Id).ToList();
+        Shuffle(otherImages);
+        for (int i = 0; i < optionsCount - 1 && i < otherImages.Count; i++)
+        {
+            opts.Add(new QuizOption { ImageDataUrl = GetSafeImageDataUri(otherImages[i]), IsCorrect = false, PersonId = otherImages[i].PersonId });
+        }
+
+        while (opts.Count < optionsCount)
+        {
+            opts.Add(new QuizOption { ImageDataUrl = TransparentPlaceholder, IsCorrect = false });
+        }
+
+        Shuffle(opts);
+
+        return new QuizQuestion { Prompt = chosenPerson.Name, Options = opts };
+    }
+
+    private string GetSafeImageDataUri(FaceImage img)
+    {
+        if (img == null) return TransparentPlaceholder;
+        if (!string.IsNullOrWhiteSpace(img.DataUri)) return img.DataUri;
+        // try to find any image for this person with data
+        var alt = images.FirstOrDefault(im => im.PersonId == img.PersonId && !string.IsNullOrWhiteSpace(im.DataUri));
+        if (alt != null) return alt.DataUri;
+        // fallback to any image with data
+        var any = images.FirstOrDefault(im => !string.IsNullOrWhiteSpace(im.DataUri));
+        if (any != null) return any.DataUri;
+        return TransparentPlaceholder;
+    }
+
+    private const string TransparentPlaceholder = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+    private void SelectOption(int index)
+    {
+        if (answerRevealed || currentQuestion == null) return;
+        if (index < 0 || index >= currentQuestion.Options.Count) return;
+        selectedIndex = index;
+        var opt = currentQuestion.Options[index];
+        if (opt.IsCorrect)
+        {
+            correctCount++;
+        }
+        answerRevealed = true;
+        var qid = currentQuestionId;
+        StateHasChanged();
+
+        if (opt.IsCorrect)
+        {
+            // auto-advance after a short pause so user can see the correct feedback
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(AutoAdvanceDelayMs);
+                    if (isRunning && answerRevealed && currentQuestionId == qid)
+                    {
+                        await InvokeAsync(() => NextQuestion());
+                    }
+                }
+                catch { }
+            });
+        }
+    }
+
+    private void Shuffle<T>(IList<T> list)
+    {
+        int n = list.Count;
+        while (n > 1)
+        {
+            n--;
+            int k = rnd.Next(n + 1);
+            T value = list[k];
+            list[k] = list[n];
+            list[n] = value;
+        }
+    }
+}
