@@ -1,0 +1,165 @@
+@page "/enrollment"
+@using System.IO
+@using FaceRecognition.Client.Models
+@inject FaceRecognition.Client.Services.IIndexedDbService IndexedDb
+@inject FaceRecognition.Client.Services.IFaceService FaceService
+
+<h3>Enroll Person</h3>
+
+<EditForm Model="person" OnValidSubmit="HandleValidSubmit">
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <InputText @bind-Value="person.Name" @oninput="OnNameInput" class="form-control" placeholder="Full name, e.g., John Smith" />
+        <div class="form-text">Enter the person's full name. Required for enrollment and quizzes.</div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Image</label>
+        <InputFile OnChange="OnInputFileChange" />
+        <div class="form-text">Upload a clear headshot where the face is unobstructed (helmet/glasses may reduce accuracy).</div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(previewUrl))
+    {
+        <div class="mb-3">
+            <img src="@previewUrl" alt="preview" style="max-width:240px;max-height:240px;" />
+        </div>
+    }
+
+    <button type="submit" class="btn btn-primary" disabled="@(!embeddingComputed || isSaving)">
+        @if (isSaving)
+        {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="ms-2">Saving…</span>
+        }
+        else
+        {
+            <span>Save</span>
+        }
+    </button>
+    <button type="button" class="btn btn-secondary ms-2" @onclick="ComputeEmbedding" disabled="@(string.IsNullOrEmpty(previewUrl) || isComputing)">
+        @if (isComputing)
+        {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="ms-2">Computing…</span>
+        }
+        else
+        {
+            <span>Compute Embedding</span>
+        }
+    </button>
+    <div class="form-text text-muted mt-2">Compute: generates a numeric face descriptor used for matching. First run may download ML models (~several MB).</div>
+    <div class="form-text text-muted">Save: stores the name, photo, and computed embedding locally in your browser's IndexedDB. Save is enabled after a successful embedding computation.</div>
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="mt-2 text-success">@statusMessage</div>
+    }
+</EditForm>
+
+@code {
+    private Person person = new Person();
+    private string previewUrl = string.Empty;
+    private string statusMessage = string.Empty;
+    private float[]? pendingEmbedding;
+    private bool isComputing = false;
+    private bool isSaving = false;
+
+    private bool embeddingComputed => pendingEmbedding != null && pendingEmbedding.Length > 0;
+
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(ms);
+        var bytes = ms.ToArray();
+        previewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+        // clear any previous computed embedding when image changes
+        pendingEmbedding = null;
+        statusMessage = string.Empty;
+        // auto-compute if name is already present
+        if (!string.IsNullOrWhiteSpace(person.Name))
+        {
+            _ = ComputeEmbedding();
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (!embeddingComputed)
+        {
+            statusMessage = "Please compute the embedding before saving.";
+            return;
+        }
+
+        isSaving = true;
+        statusMessage = string.Empty;
+        try
+        {
+            await IndexedDb.PutAsync("persons", person);
+            if (!string.IsNullOrEmpty(previewUrl))
+            {
+                var image = new FaceImage { PersonId = person.Id, DataUri = previewUrl };
+                await IndexedDb.PutAsync("images", image);
+                var embedding = new FaceEmbedding { PersonId = person.Id, ImageId = image.Id, Embedding = pendingEmbedding ?? Array.Empty<float>() };
+                await IndexedDb.PutAsync("embeddings", embedding);
+            }
+
+            statusMessage = "Saved locally in IndexedDB.";
+            // reset
+            person = new Person();
+            previewUrl = string.Empty;
+            pendingEmbedding = null;
+        }
+        catch (Exception ex)
+        {
+            statusMessage = "Save failed: " + ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ComputeEmbedding()
+    {
+        if (string.IsNullOrEmpty(previewUrl)) return;
+        if (isComputing) return;
+
+        isComputing = true;
+        statusMessage = string.Empty;
+        try
+        {
+            await FaceService.LoadModelsAsync("/models");
+            var detection = await FaceService.DetectSingleFaceEmbeddingAsync(previewUrl);
+            if (detection != null && detection.Descriptor?.Length > 0)
+            {
+                pendingEmbedding = detection.Descriptor;
+                statusMessage = "Embedding computed and ready. You can now save.";
+            }
+            else
+            {
+                pendingEmbedding = null;
+                statusMessage = "No face detected; adjust the image and try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            pendingEmbedding = null;
+            statusMessage = "Embedding failed: " + ex.Message;
+        }
+        finally
+        {
+            isComputing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnNameInput(ChangeEventArgs e)
+    {
+        person.Name = e?.Value?.ToString() ?? string.Empty;
+        // auto compute if image exists and name provided
+        if (!string.IsNullOrWhiteSpace(person.Name) && !string.IsNullOrEmpty(previewUrl) && !embeddingComputed)
+        {
+            await ComputeEmbedding();
+        }
+    }
+}

@@ -1,0 +1,65 @@
+# Visual Studio / .NET
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Rider
+.idea/
+
+# Visual Studio Code
+.vscode/
+
+# NuGet
+*.nupkg
+**/packages/
+
+# dotnet restore
+*.nuget/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+coverage/
+
+# Publish folder
+publish/
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Node modules (if any front-end tooling is used)
+node_modules/
+
+# Blazor WebAssembly build artifacts in output folders (avoid committing generated _framework files)
+# (we keep these out of the repo; generated files are in bin/ or publish output)
+
+# Tools
+.tools/
+
+# JetBrains Rider
+.idea/
+
+# Local model or binaries you may not want to commit
+wwwroot/lib/face-api.min.js
+wwwroot/models/

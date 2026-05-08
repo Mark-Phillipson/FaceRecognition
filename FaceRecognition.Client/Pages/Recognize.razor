@@ -1,0 +1,130 @@
+@page "/recognize"
+@using FaceRecognition.Client.Models
+@inject FaceRecognition.Client.Services.IFaceService FaceService
+@inject FaceRecognition.Client.Services.IRecognitionService RecognitionService
+
+<h3>Recognize</h3>
+
+<p>Upload a photo (frontal face preferred) to find matching enrolled people.</p>
+
+<InputFile OnChange="OnInputFileChange" />
+
+@if (!string.IsNullOrEmpty(previewUrl))
+{
+    <div class="mt-3">
+        <img src="@previewUrl" alt="preview" style="max-width:320px;max-height:320px;" />
+    </div>
+    <div class="mt-2">
+        <button class="btn btn-primary" @onclick="RecognizeAsync" disabled="@(isRecognizing)">
+            @if (isRecognizing)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span class="ms-2">Recognizing…</span>
+            }
+            else
+            {
+                <span>Recognize</span>
+            }
+        </button>
+        <button class="btn btn-secondary ms-2" @onclick="ComputeAllEmbeddings" disabled="@(isComputingAll)">
+            @if (isComputingAll)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span class="ms-2">Computing…</span>
+            }
+            else
+            {
+                <span>Compute embeddings (all stored images)</span>
+            }
+        </button>
+        <div class="form-text text-muted mt-2">Recognize: computes an embedding for the uploaded image and finds similar enrolled people. May download ML models on first run.</div>
+        <div class="form-text text-muted">Compute embeddings: processes all saved images to generate embeddings for faster matching later.</div>
+    </div>
+}
+
+@if (results != null)
+{
+    <h4 class="mt-4">Matches</h4>
+    @if (results.Count == 0)
+    {
+        <div>No matches found.</div>
+    }
+    else
+    {
+        <div class="list-group">
+            @foreach (var r in results)
+            {
+                <div class="list-group-item">
+                    <div class="d-flex align-items-center">
+                        @if (!string.IsNullOrEmpty(r.ImageDataUrl))
+                        {
+                            <img src="@r.ImageDataUrl" style="width:64px;height:64px;object-fit:cover;margin-right:12px;" />
+                        }
+                        <div>
+                            <div><strong>@r.PersonName</strong> (@r.PersonId)</div>
+                            <div>Distance: @r.Distance:F3</div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private string previewUrl = string.Empty;
+    private List<MatchResult>? results;
+
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+        previewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+        results = null;
+    }
+
+    private bool isRecognizing = false;
+    private bool isComputingAll = false;
+
+    private async Task RecognizeAsync()
+    {
+        results = null;
+        isRecognizing = true;
+        try
+        {
+            await FaceService.LoadModelsAsync("/models");
+            var detection = await FaceService.DetectSingleFaceEmbeddingAsync(previewUrl);
+            if (detection == null || detection.Descriptor == null || detection.Descriptor.Length == 0)
+            {
+                results = new List<MatchResult>();
+                return;
+            }
+
+            results = await RecognitionService.FindMatchesAsync(detection.Descriptor, 5);
+        }
+        catch (Exception ex)
+        {
+            results = new List<MatchResult>();
+        }
+        finally
+        {
+            isRecognizing = false;
+        }
+    }
+
+    private async Task ComputeAllEmbeddings()
+    {
+        if (isComputingAll) return;
+        isComputingAll = true;
+        try
+        {
+            await FaceService.LoadModelsAsync("/models");
+            await RecognitionService.ComputeEmbeddingsForAllImagesAsync();
+        }
+        finally
+        {
+            isComputingAll = false;
+        }
+    }
+}

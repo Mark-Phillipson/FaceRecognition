@@ -1,0 +1,25 @@
+@page "/facerecognition"
+@using FaceRecognition.Client.Models
+@inject FaceRecognition.Client.Services.IIndexedDbService IndexedDb
+
+<h3>Face Recognition</h3>
+
+<p>Offline face recognition module (work in progress).</p>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="CreateSample">Add sample person</button>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await IndexedDb.InitAsync();
+    }
+
+    private async Task CreateSample()
+    {
+        var p = new Person { Name = "Sample Person" };
+        await IndexedDb.PutAsync("persons", p);
+        var people = await IndexedDb.GetAllAsync<Person>("persons");
+    }
+}
