@@ -1,0 +1,10 @@
+name: FaceRecognition
+services:
+  client:
+    project: FaceRecognition.Client/FaceRecognition.Client.csproj
+    language: dotnet
+infrastructure:
+  path: infra/main.bicep
+  parameters:
+    environmentName: prod
+    location: westeurope
