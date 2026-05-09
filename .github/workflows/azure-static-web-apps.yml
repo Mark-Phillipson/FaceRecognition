@@ -27,6 +27,15 @@ jobs:
         run: |
           dotnet publish FaceRecognition.Client/FaceRecognition.Client.csproj -c Release
 
+      - name: Show published artifact
+        run: |
+          echo "Listing FaceRecognition.Client/bin/Release/net10.0"
+          ls -la FaceRecognition.Client/bin/Release/net10.0 || true
+          echo "Listing FaceRecognition.Client/bin/Release/net10.0/wwwroot"
+          ls -la FaceRecognition.Client/bin/Release/net10.0/wwwroot || true
+          echo "Index file present?"
+          if [ -f FaceRecognition.Client/bin/Release/net10.0/wwwroot/index.html ]; then echo "index.html found"; else echo "index.html missing"; fi
+
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -35,5 +44,5 @@ jobs:
           action: "upload"
           app_location: "FaceRecognition.Client"
           api_location: ""
-          output_location: "bin/Release/net10.0/wwwroot"
+          output_location: "FaceRecognition.Client/bin/Release/net10.0/wwwroot"
           skip_app_build: true
