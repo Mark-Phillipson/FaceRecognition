@@ -44,17 +44,17 @@
                             <div><strong>Suggested:</strong></div>
                             @foreach (var s in suggestions[idx].Take(3))
                             {
-                                <div class="d-flex align-items-center mb-1">
-                                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:@GetConfidenceColor(s.Distance);margin-right:8px;"></span>
+                                <div class="d-flex align-items-center flex-wrap mb-1 suggestion-row">
+                                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:@GetConfidenceColor(s.Distance);margin-right:8px;flex:0 0 auto;"></span>
                                     @if (!string.IsNullOrEmpty(s.ImageDataUrl))
                                     {
-                                        <img src="@s.ImageDataUrl" style="width:32px;height:32px;object-fit:cover;margin-right:8px;" />
+                                        <img src="@s.ImageDataUrl" style="width:32px;height:32px;object-fit:cover;margin-right:8px;flex:0 0 auto;" />
                                     }
-                                    <div>
-                                        <div>@s.PersonName</div>
-                                        <div class="small text-muted">Distance: @s.Distance:F3</div>
+                                    <div class="flex-grow-1" style="min-width:0;">
+                                        <div class="text-truncate">@s.PersonName</div>
+                                        <div class="small text-muted">Distance: @($"{s.Distance:F3}")</div>
                                     </div>
-                                    <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="(() => AssignSuggested(idx, s.PersonId, s.PersonName))">Assign</button>
+                                    <button class="btn btn-sm btn-outline-primary ms-auto flex-shrink-0" @onclick="(() => AssignSuggested(idx, s.PersonId, s.PersonName))">Assign</button>
                                 </div>
                             }
                         }

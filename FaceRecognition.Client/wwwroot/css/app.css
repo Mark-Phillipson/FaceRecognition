@@ -173,3 +173,7 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* GroupEnroll: prevent suggestion button overflow inside cards */
+.suggestion-row > div { min-width: 0; }
+.suggestion-row .btn { flex: 0 0 auto; }
