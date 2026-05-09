@@ -35,5 +35,5 @@ jobs:
           action: "upload"
           app_location: "FaceRecognition.Client"
           api_location: ""
-          output_location: "FaceRecognition.Client/bin/Release/net10.0/wwwroot"
+          output_location: "bin/Release/net10.0/wwwroot"
           skip_app_build: true
